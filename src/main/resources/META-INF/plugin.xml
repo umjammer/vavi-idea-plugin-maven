@@ -4,6 +4,8 @@
   <vendor email="umjammer@gmail.com">Naohide Sano</vendor>
   <description>Shows up-to-date version list on pom.xml version tags (cmd+/) and highlights versions that have newer releases.</description>
 
+  <idea-version since-build="261"/>
+
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.modules.xml</depends>
 

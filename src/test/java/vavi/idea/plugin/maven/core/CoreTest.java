@@ -10,6 +10,8 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import vavi.idea.plugin.maven.core.repository.JitpackRepository;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
@@ -69,6 +71,26 @@ class CoreTest {
         assertEquals("org/junit/junit-bom/maven-metadata.xml", new Gav("org.junit", "junit-bom").metadataPath());
     }
 
+    @Test
+    void testJitpackStable() {
+        assertFalse(VersionComparator.isStable("-8cacd12725-1"));
+        assertFalse(VersionComparator.isStable("main-SNAPSHOT"));
+    }
+
+    @Test
+    void testJitpackApplies() {
+        VersionRepository r = new JitpackRepository();
+        assertTrue(r.applies(new Gav("com.github.umjammer", "vavi-commons")));
+        assertFalse(r.applies(new Gav("org.junit", "junit-bom")));
+    }
+
+    @Test
+    void testServiceLoader() {
+        List<String> urls = VersionService.load().stream().map(VersionRepository::url).toList();
+        assertTrue(urls.contains("https://repo.maven.apache.org/maven2/"));
+        assertTrue(urls.contains("https://jitpack.io/"));
+    }
+
     /** real network, run with -Dnet=true */
     @Test
     @EnabledIfSystemProperty(named = "net", matches = "true")
@@ -77,5 +99,9 @@ class CoreTest {
         Gav gav = new Gav("org.junit.jupiter", "junit-jupiter-api");
         assertTrue(s.versions(gav).size() > 10);
         assertTrue(s.cached(gav).isPresent());
+        // jitpack only
+        assertTrue(s.versions(new Gav("com.github.umjammer", "vavi-commons")).contains("1.1.24"));
+        // unknown artifact: 404 everywhere is not an error
+        assertTrue(s.versions(new Gav("com.github.umjammer", "no-such-artifact-xyz")).isEmpty());
     }
 }

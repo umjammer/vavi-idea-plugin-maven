@@ -28,7 +28,8 @@ public class VersionComparator implements Comparator<String> {
 
     /** whether the version is a release (not alpha/beta/rc/snapshot...) */
     public static boolean isStable(String version) {
-        return !UNSTABLE.matcher(version).matches();
+        // jitpack also has commit hash versions (-8cacd12725-1) and branch snapshots
+        return Character.isDigit(version.charAt(0)) && !UNSTABLE.matcher(version).matches();
     }
 
     private static List<String> tokens(String v) {
