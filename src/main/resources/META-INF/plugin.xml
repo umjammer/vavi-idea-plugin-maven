@@ -1,0 +1,27 @@
+<idea-plugin>
+  <id>vavi.idea.plugin.maven</id>
+  <name>Maven Latest Versions</name>
+  <vendor email="umjammer@gmail.com">Naohide Sano</vendor>
+  <description>Shows up-to-date version list on pom.xml version tags (cmd+/) and highlights versions that have newer releases.</description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.xml</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <localInspection language="XML" shortName="MavenNewerVersion" displayName="Newer dependency version available"
+                     groupName="Maven" enabledByDefault="true" level="WEAK WARNING"
+                     implementationClass="vavi.idea.plugin.maven.ide.NewerVersionInspection"/>
+    <postStartupActivity implementation="vavi.idea.plugin.maven.ide.PrewarmActivity"/>
+    <notificationGroup id="vavi.maven" displayType="BALLOON"/>
+  </extensions>
+
+  <actions>
+    <action id="vavi.maven.ShowVersions" class="vavi.idea.plugin.maven.ide.ShowVersionsAction"
+            text="Show Latest Versions" description="Show the latest versions of the dependency at caret">
+      <keyboard-shortcut keymap="$default" first-keystroke="control SLASH"/>
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta SLASH"/>
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta SLASH"/>
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
+  </actions>
+</idea-plugin>
