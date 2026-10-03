@@ -17,6 +17,11 @@
  * versions which have newer releases are highlighted (weak warning, quick fix: update). Inspection: `Maven > Newer dependency version available`.
    Versions of all poms are prefetched in the background when a project is opened. Cache TTL is 30 minutes.
  * a stable version is compared with stable releases only. Property references (`${...}`) and ranges are skipped.
+ * a dependency which brings vulnerable transitive dependencies is highlighted on its `<artifactId>` (warning, also shown in the
+   "Vulnerability found in dependency" popup). Quick fix "Replace vulnerable transitive dependencies with updated versions":
+   adds `<exclusions>` for them and adds their newest stable versions as direct dependencies (same scope) just after it.
+   Inspection: `Maven > Vulnerable transitive dependencies`. The dependency tree comes from the IDE maven support (needs the Maven plugin),
+   vulnerabilities from [OSV](https://osv.dev) (results may differ from the bundled package checker which uses Mend.io).
 
 ## References
 

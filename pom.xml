@@ -160,6 +160,31 @@
     </dependency>
 
     <dependency>
+      <groupId>com.jetbrains.intellij.maven</groupId>
+      <artifactId>maven</artifactId>
+      <version>${intellij.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.jetbrains.intellij.maven</groupId>
+      <artifactId>maven-server</artifactId>
+      <version>${intellij.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.jetbrains.intellij.maven</groupId>
+      <artifactId>maven-model</artifactId>
+      <version>${intellij.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
       <scope>test</scope>
