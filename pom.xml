@@ -5,7 +5,7 @@
 
   <groupId>vavi</groupId>
   <artifactId>vavi-idea-plugin-maven</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.2</version>
 
   <properties>
     <intellij.version>261.23567.138</intellij.version>
@@ -157,6 +157,31 @@
           <artifactId>opentelemetry-api</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>com.jetbrains.intellij.maven</groupId>
+      <artifactId>maven</artifactId>
+      <version>${intellij.version}</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>*</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.jetbrains.intellij.maven</groupId>
+      <artifactId>maven-server</artifactId>
+      <version>${intellij.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.jetbrains.intellij.maven</groupId>
+      <artifactId>maven-model</artifactId>
+      <version>${intellij.version}</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>

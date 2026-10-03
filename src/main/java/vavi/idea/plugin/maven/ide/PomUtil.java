@@ -52,6 +52,26 @@ final class PomUtil {
         return new Gav(g, a);
     }
 
+    /** whether the tag is a {@code <dependency>} of the project or a profile (not managed, not of a plugin) */
+    static boolean isDependencyTag(XmlTag tag) {
+        if (!"dependency".equals(tag.getName())) return false;
+        XmlTag dependencies = tag.getParentTag();
+        if (dependencies == null || !"dependencies".equals(dependencies.getName())) return false;
+        XmlTag owner = dependencies.getParentTag();
+        return owner != null && ("project".equals(owner.getName()) || "profile".equals(owner.getName()));
+    }
+
+    /** @return null if group or artifact is not resolvable (e.g. contains ${...}) */
+    static Gav dependencyGav(XmlTag dependency) {
+        String g = dependency.getSubTagText("groupId");
+        String a = dependency.getSubTagText("artifactId");
+        if (g == null || a == null) return null;
+        g = g.trim();
+        a = a.trim();
+        if (g.contains("${") || a.contains("${") || g.isEmpty() || a.isEmpty()) return null;
+        return new Gav(g, a);
+    }
+
     /** @return null if the version is not literal (property reference) */
     static String literalVersion(XmlTag version) {
         String v = version.getValue().getTrimmedText();
