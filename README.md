@@ -25,4 +25,6 @@
 
 ## References
 
+- [jb neglect 4y](https://youtrack.jetbrains.com/issue/IDEA-149572/Maven-repository-index-does-not-update)
+
 ## TODO
