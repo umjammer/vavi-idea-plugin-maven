@@ -7,6 +7,7 @@
 package vavi.idea.plugin.maven.core;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -103,5 +105,35 @@ class CoreTest {
         assertTrue(s.versions(new Gav("com.github.umjammer", "vavi-commons")).contains("1.1.24"));
         // unknown artifact: 404 everywhere is not an error
         assertTrue(s.versions(new Gav("com.github.umjammer", "no-such-artifact-xyz")).isEmpty());
+    }
+
+    @Test
+    void testParseArtifacts() throws Exception {
+        String json = """
+                {"responseHeader":{},"response":{"numFound":2,"start":0,"docs":[
+                {"id":"org.eclipse.jetty.websocket:websocket-core-common","g":"org.eclipse.jetty.websocket","a":"websocket-core-common"},
+                {"id":"org.eclipse.jetty.websocket:jetty-websocket-core-common","g":"org.eclipse.jetty.websocket","a":"jetty-websocket-core-common"}]}}""";
+        assertEquals(List.of("websocket-core-common", "jetty-websocket-core-common"), VersionService.parseArtifacts(json));
+        assertThrows(IOException.class, () -> VersionService.parseArtifacts("<html/>"));
+    }
+
+    @Test
+    void testSuccessorCandidates() {
+        Gav gav = new Gav("org.eclipse.jetty.websocket", "websocket-core-common");
+        List<String> ids = List.of("websocket-core-common", "jetty-websocket-core-common", "websocket-core-common-tests", "jetty-websocket-core-server");
+        assertEquals(List.of(new Gav("org.eclipse.jetty.websocket", "jetty-websocket-core-common")), VersionService.successorCandidates(gav, ids));
+    }
+
+    /** real network, run with -Dnet=true */
+    @Test
+    @EnabledIfSystemProperty(named = "net", matches = "true")
+    void testSuccessor() throws Exception {
+        VersionService s = new VersionService();
+        Gav gav = new Gav("org.eclipse.jetty.websocket", "websocket-core-common");
+        assertTrue(s.cachedSuccessor(gav, "11.0.26").isEmpty()); // nothing cached yet
+        for (Gav c : VersionService.successorCandidates(gav, s.artifacts(gav.groupId()))) s.versions(c);
+        Coordinate c = s.cachedSuccessor(gav, "11.0.26").orElseThrow();
+        assertEquals("jetty-websocket-core-common", c.artifactId());
+        assertTrue(c.version().startsWith("12."), c.version());
     }
 }

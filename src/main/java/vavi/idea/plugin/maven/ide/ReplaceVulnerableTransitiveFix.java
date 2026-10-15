@@ -27,6 +27,8 @@ import com.intellij.psi.xml.XmlTag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.idea.maven.project.MavenProject;
 import org.jetbrains.idea.maven.project.MavenProjectsManager;
+import vavi.idea.plugin.maven.core.Coordinate;
+import vavi.idea.plugin.maven.core.Gav;
 
 
 /**
@@ -41,6 +43,8 @@ import org.jetbrains.idea.maven.project.MavenProjectsManager;
  * &lt;/dependency&gt;
  * &lt;dependency&gt;&lt;groupId&gt;g&lt;/groupId&gt;&lt;artifactId&gt;a&lt;/artifactId&gt;&lt;version&gt;newer&lt;/version&gt;&lt;/dependency&gt;
  * </pre>
+ * The added one may be a renamed artifact (e.g. {@code jetty-websocket-core-common} for {@code websocket-core-common})
+ * when the vulnerable one has no newer version.
  * Already existing exclusions and dependencies are left as they are.
  * The maven project is synced after the fix and also after its undo / redo.
  *
@@ -49,8 +53,18 @@ import org.jetbrains.idea.maven.project.MavenProjectsManager;
  */
 class ReplaceVulnerableTransitiveFix implements LocalQuickFix, PriorityAction {
 
-    /** an updated version of a vulnerable transitive dependency */
-    record Replacement(String groupId, String artifactId, String version) {}
+    /**
+     * @param excluded a vulnerable transitive dependency
+     * @param added an updated version of it, or of its renamed artifact
+     */
+    record Replacement(Gav excluded, Coordinate added) {
+
+        /** for the fix name */
+        String label() {
+            return excluded.artifactId().equals(added.artifactId()) ? excluded.artifactId() + " with " + added.version()
+                    : excluded.artifactId() + " with " + added.artifactId() + " " + added.version();
+        }
+    }
 
     private final List<Replacement> replacements;
 
@@ -66,7 +80,7 @@ class ReplaceVulnerableTransitiveFix implements LocalQuickFix, PriorityAction {
     @Override
     public @NotNull String getName() {
         return replacements.size() == 1
-                ? "Replace vulnerable transitive " + replacements.getFirst().artifactId() + " with " + replacements.getFirst().version()
+                ? "Replace vulnerable transitive " + replacements.getFirst().label()
                 : "Replace " + replacements.size() + " vulnerable transitive dependencies with updated versions";
     }
 
@@ -93,16 +107,16 @@ class ReplaceVulnerableTransitiveFix implements LocalQuickFix, PriorityAction {
         if (exclusions == null) exclusions = dependency.addSubTag(dependency.createChildTag("exclusions", ns, null, false), false);
         PsiElement anchor = dependency;
         for (Replacement r : replacements) {
-            if (find(exclusions, "exclusion", r) == null) {
+            if (find(exclusions, "exclusion", r.excluded()) == null) {
                 XmlTag exclusion = exclusions.addSubTag(exclusions.createChildTag("exclusion", ns, null, false), false);
-                exclusion.addSubTag(exclusion.createChildTag("groupId", ns, r.groupId(), false), false);
-                exclusion.addSubTag(exclusion.createChildTag("artifactId", ns, r.artifactId(), false), false);
+                exclusion.addSubTag(exclusion.createChildTag("groupId", ns, r.excluded().groupId(), false), false);
+                exclusion.addSubTag(exclusion.createChildTag("artifactId", ns, r.excluded().artifactId(), false), false);
             }
-            if (dependencies != null && find(dependencies, "dependency", r) == null) {
+            if (dependencies != null && find(dependencies, "dependency", r.added().gav()) == null) {
                 XmlTag added = (XmlTag) dependencies.addAfter(dependencies.createChildTag("dependency", ns, null, false), anchor);
-                added.addSubTag(added.createChildTag("groupId", ns, r.groupId(), false), false);
-                added.addSubTag(added.createChildTag("artifactId", ns, r.artifactId(), false), false);
-                added.addSubTag(added.createChildTag("version", ns, r.version(), false), false);
+                added.addSubTag(added.createChildTag("groupId", ns, r.added().groupId(), false), false);
+                added.addSubTag(added.createChildTag("artifactId", ns, r.added().artifactId(), false), false);
+                added.addSubTag(added.createChildTag("version", ns, r.added().version(), false), false);
                 if (scope != null && !scope.isBlank()) added.addSubTag(added.createChildTag("scope", ns, scope.trim(), false), false);
                 anchor = added;
             }
@@ -146,11 +160,11 @@ class ReplaceVulnerableTransitiveFix implements LocalQuickFix, PriorityAction {
         });
     }
 
-    /** @return a sub tag of parent named name which has the same group and artifact as r */
-    private static XmlTag find(XmlTag parent, String name, Replacement r) {
+    /** @return a sub tag of parent named name which has the same group and artifact as gav */
+    private static XmlTag find(XmlTag parent, String name, Gav gav) {
         for (XmlTag t : parent.findSubTags(name)) {
             String g = t.getSubTagText("groupId"), a = t.getSubTagText("artifactId");
-            if (g != null && a != null && g.trim().equals(r.groupId()) && a.trim().equals(r.artifactId())) return t;
+            if (g != null && a != null && g.trim().equals(gav.groupId()) && a.trim().equals(gav.artifactId())) return t;
         }
         return null;
     }

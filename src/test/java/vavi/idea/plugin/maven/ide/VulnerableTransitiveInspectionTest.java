@@ -47,4 +47,18 @@ class VulnerableTransitiveInspectionTest {
         Set<Coordinate> r = VulnerableTransitiveInspection.transitives(List.of(other, root), new Gav("com.github.umjammer", "vavi-awt"));
         assertEquals(Set.of(new Coordinate("org.apache.ant", "ant", "1.10.15"), new Coordinate("org.apache.ant", "ant-launcher", "1.10.15")), r);
     }
+
+    @Test
+    void testPackageCheckerMatches() {
+        Coordinate common = new Coordinate("org.eclipse.jetty.websocket", "websocket-core-common", "11.0.26");
+        Coordinate server = new Coordinate("org.eclipse.jetty.websocket", "websocket-core-server", "11.0.26");
+        List<Coordinate> candidates = List.of(common, server);
+        // fingerprint of the package checker
+        assertEquals(List.of(common), PackageCheckerBridge.matches(candidates, "maven:org.eclipse.jetty.websocket:websocket-core-common:11.0.26", null));
+        // message
+        assertEquals(List.of(server), PackageCheckerBridge.matches(candidates, null,
+                "<html><body> Provides transitive vulnerable dependency maven:org.eclipse.jetty.websocket:websocket-core-server:11.0.26 CVE-1</body> </html>"));
+        // other version
+        assertEquals(List.of(), PackageCheckerBridge.matches(candidates, null, "maven:org.eclipse.jetty.websocket:websocket-core-common:11.0.261"));
+    }
 }

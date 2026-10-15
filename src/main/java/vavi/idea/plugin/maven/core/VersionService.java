@@ -24,6 +24,10 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+
 
 /**
  * VersionService, fetches versions straight from maven-metadata.xml of a repository
@@ -34,6 +38,9 @@ import java.util.function.Supplier;
  */
 public class VersionService {
 
+    /** maven central search, used only for listing artifacts of a group */
+    private static final String SEARCH = "https://search.maven.org/solrsearch/select?wt=json&rows=1000&q=g:";
+
     private record Entry(long time, List<String> versions) {}
 
     private final List<VersionRepository> repos;
@@ -41,6 +48,8 @@ public class VersionService {
     private final Supplier<Long> clock;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final ConcurrentHashMap<Gav, Entry> cache = new ConcurrentHashMap<>();
+    /** artifact ids of a group id */
+    private final ConcurrentHashMap<String, Entry> artifacts = new ConcurrentHashMap<>();
     private final VersionComparator comparator = new VersionComparator();
 
     public VersionService() {
@@ -145,6 +154,65 @@ public class VersionService {
                 .findFirst(); // sorted newest first
     }
 
+    /**
+     * @param current the current version
+     * @return the newest stable version of a renamed artifact (e.g. jetty 11 {@code websocket-core-common} is
+     * {@code jetty-websocket-core-common} since jetty 12) newer than current. needs {@link #artifacts} and
+     * {@link #versions} of the candidates cached, never touches the network.
+     */
+    public Optional<Coordinate> cachedSuccessor(Gav gav, String current) {
+        return cachedArtifacts(gav.groupId()).stream()
+                .flatMap(ids -> successorCandidates(gav, ids).stream())
+                .flatMap(c -> cached(c).flatMap(vs -> newer(c, current, vs)).map(v -> new Coordinate(c.groupId(), c.artifactId(), v)).stream())
+                .max((a, b) -> comparator.compare(a.version(), b.version()));
+    }
+
+    /** @return artifacts of the same group which artifact id is {@code *-artifactId} */
+    public static List<Gav> successorCandidates(Gav gav, List<String> artifactIds) {
+        return artifactIds.stream().filter(a -> a.endsWith("-" + gav.artifactId()))
+                .map(a -> new Gav(gav.groupId(), a)).toList();
+    }
+
+    /** @return artifact ids of the group on maven central. blocking, call it from a background thread. */
+    public List<String> artifacts(String groupId) throws IOException {
+        Entry e = artifacts.get(groupId);
+        if (e != null && clock.get() - e.time < ttl.toMillis()) return e.versions;
+        HttpRequest req = HttpRequest.newBuilder(URI.create(SEARCH + groupId)).timeout(Duration.ofSeconds(30)).GET().build();
+        try {
+            HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() != 200) throw new IOException("HTTP " + res.statusCode() + ": " + req.uri());
+            List<String> r = parseArtifacts(res.body());
+            artifacts.put(groupId, new Entry(clock.get(), r));
+            return r;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IOException(ex);
+        }
+    }
+
+    /** whether the artifacts cache of the group is available and not expired */
+    public boolean isFreshArtifacts(String groupId) {
+        Entry e = artifacts.get(groupId);
+        return e != null && clock.get() - e.time < ttl.toMillis();
+    }
+
+    /** @return cached artifact ids of the group even if expired, never touches the network */
+    public Optional<List<String>> cachedArtifacts(String groupId) {
+        return Optional.ofNullable(artifacts.get(groupId)).map(Entry::versions);
+    }
+
+    /** @return artifact ids in a maven central search response */
+    static List<String> parseArtifacts(String json) throws IOException {
+        try {
+            JsonArray docs = JsonParser.parseString(json).getAsJsonObject().getAsJsonObject("response").getAsJsonArray("docs");
+            List<String> r = new ArrayList<>();
+            for (JsonElement d : docs) r.add(d.getAsJsonObject().get("a").getAsString());
+            return List.copyOf(r);
+        } catch (RuntimeException e) {
+            throw new IOException("unexpected search response: " + json, e);
+        }
+    }
+
     /** forgets the cache of the artifact to force refetching */
     public void clear(Gav gav) {
         cache.remove(gav);
@@ -152,5 +220,6 @@ public class VersionService {
 
     public void clear() {
         cache.clear();
+        artifacts.clear();
     }
 }
