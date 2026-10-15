@@ -5,6 +5,8 @@
 
 # vavi-idea-plugin-maven
 
+<img alt="logo" src="src/test/resources/duke_idea_plugin_maven.png" width="160" />
+
 ## Install
 
  * [maven](https://jitpack.io/#umjammer/vavi-idea-plugin-maven)
@@ -31,3 +33,9 @@
 - [jb neglect 4y](https://youtrack.jetbrains.com/issue/IDEA-149572/Maven-repository-index-does-not-update)
 
 ## TODO
+
+- exclusion for jitpack
+
+---
+
+<sub>image designed by @umjammer, drawn by nano banana</sub>
