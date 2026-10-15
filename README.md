@@ -5,6 +5,8 @@
 
 # vavi-idea-plugin-maven
 
+<img alt="logo" src="src/test/resources/duke_idea_plugin_maven.png" width="160" />
+
 ## Install
 
  * [maven](https://jitpack.io/#umjammer/vavi-idea-plugin-maven)
@@ -20,11 +22,20 @@
  * a dependency which brings vulnerable transitive dependencies is highlighted on its `<artifactId>` (warning, also shown in the
    "Vulnerability found in dependency" popup). Quick fix "Replace vulnerable transitive dependencies with updated versions":
    adds `<exclusions>` for them and adds their newest stable versions as direct dependencies (same scope) just after it.
+   When a vulnerable one has no newer version, its renamed artifact in the same group (`*-<artifactId>`, e.g. jetty 12
+   `jetty-websocket-core-common` for jetty 11 `websocket-core-common`, found by Maven Central search) is added instead.
    Inspection: `Maven > Vulnerable transitive dependencies`. The dependency tree comes from the IDE maven support (needs the Maven plugin),
-   vulnerabilities from [OSV](https://osv.dev) (results may differ from the bundled package checker which uses Mend.io).
+   vulnerabilities from [OSV](https://osv.dev) and from the bundled package checker (Mend.io) results if it is enabled,
+   so a dependency marked by the package checker gets the quick fix too.
 
 ## References
 
 - [jb neglect 4y](https://youtrack.jetbrains.com/issue/IDEA-149572/Maven-repository-index-does-not-update)
 
 ## TODO
+
+- exclusion for jitpack
+
+---
+
+<sub>image designed by @umjammer, drawn by nano banana</sub>

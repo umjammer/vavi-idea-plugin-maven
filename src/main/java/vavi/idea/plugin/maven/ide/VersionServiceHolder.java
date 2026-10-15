@@ -37,6 +37,7 @@ public final class VersionServiceHolder {
 
     private final VersionService service = new VersionService();
     private final ConcurrentHashMap<Gav, Long> attempts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> groupAttempts = new ConcurrentHashMap<>();
 
     public VersionService service() {
         return service;
@@ -58,6 +59,36 @@ public final class VersionServiceHolder {
             }
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (!project.isDisposed()) DaemonCodeAnalyzer.getInstance(project).restart("vavi maven versions");
+            });
+        });
+    }
+
+    /**
+     * fetches artifacts of the group and versions of successor candidates of the artifact in the background
+     * for {@link VersionService#cachedSuccessor}, then restarts highlighting. returns immediately.
+     */
+    public void requestSuccessors(Gav gav, Project project) {
+        String key = gav.groupId();
+        if (service.isFreshArtifacts(gav.groupId())) {
+            service.cachedArtifacts(gav.groupId()).ifPresent(ids ->
+                    VersionService.successorCandidates(gav, ids).forEach(c -> requestRefresh(c, project)));
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = groupAttempts.get(key);
+        if (last != null && now - last < RETRY_INTERVAL) return;
+        if (groupAttempts.put(key, now) != null && last != null && now - last < RETRY_INTERVAL) return; // lost the race
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                for (Gav c : VersionService.successorCandidates(gav, service.artifacts(gav.groupId()))) {
+                    service.versions(c);
+                }
+            } catch (IOException e) {
+                LOG.debug("cannot fetch successors of " + gav, e);
+                return;
+            }
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (!project.isDisposed()) DaemonCodeAnalyzer.getInstance(project).restart("vavi maven successors");
             });
         });
     }

@@ -7,6 +7,7 @@
 package vavi.idea.plugin.maven.ide;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.intellij.codeInspection.LocalInspectionTool;
 import com.intellij.codeInspection.LocalQuickFix;
@@ -26,6 +28,7 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiElementVisitor;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.XmlElementVisitor;
+import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.xml.XmlTag;
 import com.intellij.xml.util.XmlStringUtil;
 import org.jetbrains.annotations.NotNull;
@@ -44,7 +47,8 @@ import vavi.idea.plugin.maven.core.VulnerabilityService;
  * VulnerableTransitiveInspection, highlights a dependency which brings transitive dependencies having known vulnerabilities,
  * and offers {@link ReplaceVulnerableTransitiveFix}.
  * <p>
- * The dependency tree is the one resolved by the IDE maven support, vulnerabilities come from OSV.
+ * The dependency tree is the one resolved by the IDE maven support, vulnerabilities come from OSV
+ * and from the package checker ({@link PackageCheckerBridge}) so that the same dependencies as its markers are fixable.
  * Highlights the same {@code <artifactId>} as the "Vulnerability found in dependency" of the package checker,
  * so the quick fix also shows up in its popup.
  *
@@ -69,6 +73,8 @@ public class VulnerableTransitiveInspection extends LocalInspectionTool {
         VersionServiceHolder versionHolder = ApplicationManager.getApplication().getService(VersionServiceHolder.class);
         VulnerabilityService vulnerabilities = vulnerabilityHolder.service();
         VersionService versions = versionHolder.service();
+        // the package checker runs once per file, lazily
+        var packageChecker = new Object() { Map<XmlTag, Map<Coordinate, List<String>>> found; };
         return new XmlElementVisitor() {
             @Override
             public void visitXmlTag(@NotNull XmlTag tag) {
@@ -84,20 +90,21 @@ public class VulnerableTransitiveInspection extends LocalInspectionTool {
                 for (Coordinate c : transitives) {
                     vulnerabilities.cached(c).filter(ids -> !ids.isEmpty()).ifPresent(ids -> vulnerable.put(c, ids));
                 }
+                if (packageChecker.found == null) packageChecker.found = PackageCheckerBridge.vulnerabilities(file, isOnTheFly, allTransitives(file, tree));
+                packageChecker.found.getOrDefault(tag, Map.of()).forEach((c, ids) -> vulnerable.merge(c, ids, (a, b) ->
+                        Stream.concat(a.stream(), b.stream()).distinct().toList()));
                 if (vulnerable.isEmpty()) return;
                 List<ReplaceVulnerableTransitiveFix.Replacement> replacements = new ArrayList<>();
                 for (Coordinate c : vulnerable.keySet()) {
-                    versionHolder.requestRefresh(c.gav(), file.getProject());
-                    versions.cached(c.gav()).flatMap(vs -> versions.newer(c.gav(), c.version(), vs)).ifPresent(v ->
-                            replacements.add(new ReplaceVulnerableTransitiveFix.Replacement(c.groupId(), c.artifactId(), v)));
+                    replacement(c, versions, versionHolder, file).ifPresent(replacements::add);
                 }
                 String message = "Vulnerable transitive dependencies:\n" + vulnerable.entrySet().stream()
-                        .map(e -> e.getKey() + " (" + String.join(", ", e.getValue()) + ")")
+                        .map(e -> e.getKey() + (e.getValue().isEmpty() ? "" : " (" + String.join(", ", e.getValue()) + ")"))
                         .collect(Collectors.joining("\n"));
                 // the popup shows the tooltip, the problems view the plain message
                 String tooltip = "<html>Vulnerable transitive dependencies:<br>" + vulnerable.entrySet().stream()
-                        .map(e -> XmlStringUtil.escapeString(e.getKey().toString()) + " <span style=\"color:" + ID_COLOR + "\">("
-                                + XmlStringUtil.escapeString(String.join(", ", e.getValue())) + ")</span>")
+                        .map(e -> XmlStringUtil.escapeString(e.getKey().toString()) + (e.getValue().isEmpty() ? "" : " <span style=\"color:" + ID_COLOR + "\">("
+                                + XmlStringUtil.escapeString(String.join(", ", e.getValue())) + ")</span>"))
                         .collect(Collectors.joining("<br>")) + "</html>";
                 PsiElement target = artifactId.getValue().getChildren().length > 0 ? artifactId.getValue().getChildren()[0] : artifactId;
                 LocalQuickFix[] fixes = replacements.isEmpty() ? LocalQuickFix.EMPTY_ARRAY
@@ -106,6 +113,33 @@ public class VulnerableTransitiveInspection extends LocalInspectionTool {
                         ProblemHighlightType.GENERIC_ERROR_OR_WARNING, false, null, true, isOnTheFly, tooltip));
             }
         };
+    }
+
+    /**
+     * @return an updated version of the vulnerable transitive dependency, or the newest one of its renamed artifact
+     * if the artifact itself has no newer version. from the caches only, missing ones are requested.
+     */
+    private static Optional<ReplaceVulnerableTransitiveFix.Replacement> replacement(Coordinate c, VersionService versions,
+                                                                                VersionServiceHolder versionHolder, PsiFile file) {
+        versionHolder.requestRefresh(c.gav(), file.getProject());
+        Optional<String> newer = versions.cached(c.gav()).flatMap(vs -> versions.newer(c.gav(), c.version(), vs));
+        if (newer.isPresent()) {
+            return newer.map(v -> new ReplaceVulnerableTransitiveFix.Replacement(c.gav(), new Coordinate(c.groupId(), c.artifactId(), v)));
+        }
+        if (versions.cached(c.gav()).isEmpty()) return Optional.empty(); // not fetched yet
+        versionHolder.requestSuccessors(c.gav(), file.getProject());
+        return versions.cachedSuccessor(c.gav(), c.version()).map(s -> new ReplaceVulnerableTransitiveFix.Replacement(c.gav(), s));
+    }
+
+    /** @return transitive dependencies of each dependency tag in the file */
+    private static Map<XmlTag, Set<Coordinate>> allTransitives(PsiFile file, List<MavenArtifactNode> tree) {
+        Map<XmlTag, Set<Coordinate>> r = new HashMap<>();
+        for (XmlTag t : PsiTreeUtil.findChildrenOfType(file, XmlTag.class)) {
+            if (!PomUtil.isDependencyTag(t)) continue;
+            Gav gav = PomUtil.dependencyGav(t);
+            if (gav != null) r.put(t, transitives(tree, gav));
+        }
+        return r;
     }
 
     /**
