@@ -5,7 +5,7 @@
 
   <groupId>vavi</groupId>
   <artifactId>vavi-idea-plugin-maven</artifactId>
-  <version>0.0.3</version>
+  <version>0.0.4</version>
 
   <properties>
     <intellij.version>263.7307.200</intellij.version>
