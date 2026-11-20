@@ -66,7 +66,7 @@ public class ShowVersionsAction extends AnAction {
         if (tag == null || editor == null || project == null) return;
         Gav gav = PomUtil.gav(tag);
         VersionService service = ApplicationManager.getApplication().getService(VersionServiceHolder.class).service();
-        var pointer = com.intellij.openapi.application.ReadAction.compute(
+        var pointer = com.intellij.openapi.application.ReadAction.computeBlocking(
                 () -> com.intellij.psi.SmartPointerManager.getInstance(project).createSmartPsiElementPointer(tag));
         // always asks the repository (no stale list); falls back to the cache when offline
         ApplicationManager.getApplication().executeOnPooledThread(() -> {

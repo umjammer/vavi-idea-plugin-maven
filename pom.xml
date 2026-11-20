@@ -8,7 +8,7 @@
   <version>0.0.3</version>
 
   <properties>
-    <intellij.version>261.23567.138</intellij.version>
+    <intellij.version>263.7307.200</intellij.version>
   </properties>
 
   <build>

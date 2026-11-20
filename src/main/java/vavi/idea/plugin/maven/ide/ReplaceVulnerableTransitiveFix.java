@@ -156,7 +156,7 @@ class ReplaceVulnerableTransitiveFix implements LocalQuickFix, PriorityAction {
             FileDocumentManager.getInstance().saveAllDocuments(); // maven reads the pom from the disk
             MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
             MavenProject mavenProject = manager.findProject(pom);
-            if (mavenProject != null) manager.forceUpdateProjects(List.of(mavenProject));
+            if (mavenProject != null) manager.scheduleForceUpdateMavenProject(mavenProject);
         });
     }
 
