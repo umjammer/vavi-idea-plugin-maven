@@ -13,7 +13,6 @@ import java.util.Set;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
 import com.intellij.psi.PsiManager;
@@ -52,7 +51,7 @@ public class PrewarmActivity implements ProjectActivity {
 
     private void prewarm(Project project) {
         VersionService service = ApplicationManager.getApplication().getService(VersionServiceHolder.class).service();
-        Set<Gav> gavs = DumbService.getInstance(project).runReadActionInSmartMode(() -> {
+        Set<Gav> gavs = ReadAction.nonBlocking(() -> {
             Set<Gav> r = new HashSet<>();
             for (var vf : FilenameIndex.getVirtualFilesByName("pom.xml", GlobalSearchScope.projectScope(project))) {
                 if (PsiManager.getInstance(project).findFile(vf) instanceof XmlFile x && PomUtil.isPom(x)) {
@@ -65,7 +64,7 @@ public class PrewarmActivity implements ProjectActivity {
                 }
             }
             return r;
-        });
+        }).inSmartMode(project).executeSynchronously();
         for (Gav gav : gavs) {
             if (project.isDisposed()) return;
             try {
